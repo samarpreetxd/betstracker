@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bets Tracker with Profit Graph</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+
+        .form-container {
+            margin-top: 20px;
+        }
+
+        input, button {
+            padding: 10px;
+            margin: 5px;
+        }
+
+        #bet-list {
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            padding: 10px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .bet-item {
+            border-bottom: 1px solid #ddd;
+            padding: 10px 0;
+        }
+
+        .bet-item:last-child {
+            border-bottom: none;
+        }
+
+        #profit-chart {
+            max-width: 600px;
+            margin: 40px auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Bets Tracker</h1>
+    
+    <div>
+        <h2>Current Balance: $<span id="balance">0.00</span></h2>
+        <button onclick="location.href = './deposit.html';">Deposit</button>
+    </div>
+    
+    <div class="form-container">
+        <form id="betForm">
+            <input type="text" id="betName" placeholder="Bet Name" required />
+            <input type="number" id="betWager" placeholder="Wager Amount" step="0.01" required />
+            <input type="number" id="betMultiplier" placeholder="Multiplier" step="0.01" required />
+            <button type="submit">Save Bet</button>
+        </form>
+        
+    </div>
+    
+    <div id="bet-list">
+        <h2>Saved Bets:</h2>
+        <div id="savedBets"></div>
+    </div>
+
+    <div id="profit-chart">
+        <canvas id="profitGraph"></canvas>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        let profitHistory = JSON.parse(localStorage.getItem('profitHistory')) || [0];
+        let cumulativeProfit = profitHistory[profitHistory.length - 1] || 0;
+
+        // Initialize and display balance
+        function displayBalance() {
+            let balance = localStorage.getItem('balance') || 0;
+            document.getElementById('balance').textContent = parseFloat(balance).toFixed(2);
+        }
+
+        // Function to save bet and update balance in localStorage
+        function saveBet(betName, wagerAmount, multiplier) {
+            let balance = parseFloat(localStorage.getItem('balance')) || 0;
+            
+            if (wagerAmount > balance) {
+                alert("Not enough balance for this bet!");
+                return;
+            }
+
+            let bets = JSON.parse(localStorage.getItem('bets')) || [];
+            let bet = {
+                name: betName,
+                wager: wagerAmount,
+                multiplier: multiplier,
+                result: 'lose', // Default is lose
+                wonAmount: 0 // Default won amount
+            };
+            bets.push(bet);
+            localStorage.setItem('bets', JSON.stringify(bets));
+
+            // Deduct the wager from the balance
+            balance -= wagerAmount;
+            localStorage.setItem('balance', balance.toFixed(2));
+
+            displayBets();
+            displayBalance();
+        }
+
+        // Function to calculate the won amount based on win/lose status
+        function calculateWonAmount(wager, multiplier, result) {
+            return result === 'win' ? (wager * multiplier).toFixed(2) : 0;
+        }
+
+        // Function to display bets from localStorage
+        function displayBets() {
+            let savedBetsDiv = document.getElementById('savedBets');
+            savedBetsDiv.innerHTML = ''; // Clear existing bets
+            let bets = JSON.parse(localStorage.getItem('bets')) || [];
+
+            bets.forEach((bet, index) => {
+                let wonAmount = calculateWonAmount(bet.wager, bet.multiplier, bet.result);
+                let betDiv = document.createElement('div');
+                betDiv.classList.add('bet-item');
+                betDiv.innerHTML = `
+                    <strong>Bet Name:</strong> ${bet.name}<br/>
+                    <strong>Wager:</strong> $${bet.wager}<br/>
+                    <strong>Multiplier:</strong> ${bet.multiplier}<br/>
+                    <strong>Result:</strong> 
+                    <input type="checkbox" id="resultCheckbox-${index}" ${bet.result === 'win' ? 'checked' : ''} onchange="toggleResult(${index})"> ${bet.result} <br/>
+                    <strong>Won Amount:</strong> $<span id="wonAmount-${index}">${wonAmount}</span>
+                    <br/>
+                    <button onclick="deleteBet(${index})">Delete</button>
+                `;
+                savedBetsDiv.appendChild(betDiv);
+            });
+        }
+
+        // Function to toggle win/loss status and update balance and profit
+        function toggleResult(index) {
+            let bets = JSON.parse(localStorage.getItem('bets')) || [];
+            let balance = parseFloat(localStorage.getItem('balance')) || 0;
+            let checkbox = document.getElementById(`resultCheckbox-${index}`);
+            
+            if (checkbox.checked && bets[index].result === 'lose') {
+                bets[index].result = 'win';
+                let wonAmount = parseFloat(bets[index].wager * bets[index].multiplier);
+                balance += wonAmount;
+                bets[index].wonAmount = wonAmount;
+
+                // Update profit
+                cumulativeProfit += wonAmount - bets[index].wager;
+                profitHistory.push(cumulativeProfit);
+            } else if (!checkbox.checked && bets[index].result === 'win') {
+                bets[index].result = 'lose';
+                let wonAmount = parseFloat(bets[index].wonAmount);
+                balance -= wonAmount;
+                bets[index].wonAmount = 0;
+
+                // Update profit
+                cumulativeProfit -= wonAmount - bets[index].wager;
+                profitHistory.push(cumulativeProfit);
+            }
+
+            localStorage.setItem('bets', JSON.stringify(bets));
+            localStorage.setItem('balance', balance.toFixed(2));
+            localStorage.setItem('profitHistory', JSON.stringify(profitHistory));
+
+            displayBets();
+            displayBalance();
+            updateProfitGraph();
+        }
+
+        // Function to delete a bet
+        function deleteBet(index) {
+            let bets = JSON.parse(localStorage.getItem('bets')) || [];
+            let balance = parseFloat(localStorage.getItem('balance')) || 0;
+
+            // If the bet was won, revert the won amount
+            if (bets[index].result === 'win') {
+                balance -= bets[index].wonAmount;
+            }
+
+            bets.splice(index, 1);
+            localStorage.setItem('bets', JSON.stringify(bets));
+            localStorage.setItem('balance', balance.toFixed(2));
+            displayBets();
+            displayBalance();
+        }
+
+        // Handle form submission
+        document.getElementById('betForm').addEventListener('submit', function(event) {
+            event.preventDefault(); // Prevent form from submitting the traditional way
+            let betName = document.getElementById('betName').value;
+            let wagerAmount = parseFloat(document.getElementById('betWager').value);
+            let multiplier = parseFloat(document.getElementById('betMultiplier').value);
+
+            saveBet(betName, wagerAmount, multiplier);
+
+            // Clear form fields
+            document.getElementById('betForm').reset();
+        });
+
+        // Function to update the profit graph
+        function updateProfitGraph() {
+            const ctx = document.getElementById('profitGraph').getContext('2d');
+            const chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: profitHistory.map((_, i) => `Bet ${i}`),
+                    datasets: [{
+                        label: 'Cumulative Profit',
+                        data: profitHistory,
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 2,
+                        fill: false
+                    }]
+                },
+                options: {
+                    scales: {
+                        x: {
+                            beginAtZero: true
+                        },
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        // Display bets, balance, and graph when the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            displayBets();
+            displayBalance();
+            updateProfitGraph();
+        });
+    </script>
+</body>
+</html>

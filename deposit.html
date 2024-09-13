@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deposit</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 50px;
+        }
+
+        input, button {
+            padding: 10px;
+            margin: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Deposit</h1>
+    
+    <form id="depositForm">
+        <input type="number" id="depositAmount" placeholder="Deposit Amount" required />
+        <button type="submit">Add Deposit</button>
+    </form>
+
+    <button onclick="location.href = './index.html';">Back to Home</button>
+
+    <script>
+        // Function to handle deposit submission
+        document.getElementById('depositForm').addEventListener('submit', function(event) {
+            event.preventDefault(); // Prevent default form submission
+            let depositAmount = parseFloat(document.getElementById('depositAmount').value);
+            let balance = parseFloat(localStorage.getItem('balance')) || 0;
+            
+            // Update balance
+            balance += depositAmount;
+            localStorage.setItem('balance', balance.toFixed(2));
+
+            alert("Deposit successful!");
+
+            // Clear form
+            document.getElementById('depositForm').reset();
+        });
+    </script>
+</body>
+</html>
