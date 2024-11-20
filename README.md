@@ -1,5 +1,9 @@
-# betstracker
+#Dropped
+
+betstracker
 Tracker for my bets.
+
+
 
 To do:
 - Make the graph better looking
